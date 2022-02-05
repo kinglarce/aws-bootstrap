@@ -4,7 +4,7 @@ Parameters:
   CodePipelineBucket:
     Type: String
     Description: 'The S3 bucket for CodePipeline artifacts.'
-
+# Cloudformation Script for Creating CodePipeline Service for creating S3 bucket
 Resources:
   CodePipelineS3Bucket:
     Type: AWS::S3::Bucket

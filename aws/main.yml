@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-
+# Parameter Passed from Shell script
 Parameters:
   EC2InstanceType:
     Type: String
@@ -23,8 +23,9 @@ Parameters:
     Type: String
     NoEcho: true
     Description: 'A GitHub personal access token with "repo" and "admin:repo_hook" permissions.'
-
+# Cloudformation script for creating different service
 Resources:
+  # Creating SecurityGroup service for instance firewall
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -41,7 +42,9 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref AWS::StackName
-  
+  # Creating Instance role which define its permission
+  # Now instance role grant full access to CloudWatch
+  # Add new managed policy to allow EC2 instance to access CodeDeploy
   InstanceRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -59,13 +62,13 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref AWS::StackName
-
+  # Creating InstanceProfile to tie up IAM role to EC2 instance
   InstanceProfile:
     Type: "AWS::IAM::InstanceProfile"
     Properties:
       Roles:
         - Ref: InstanceRole
-
+  # Creating the EC2 instance itself
   Instance:
     Type: AWS::EC2::Instance
     CreationPolicy:
@@ -77,11 +80,14 @@ Resources:
         config:
           packages:
             yum:
-              ruby: []
+              ruby: [] # CodeDeploy requires "ruby"
+           # Add this section "files" and "commands" to install CodeDeploy agent
           files:
+            # Download CodeDeploy script to " /home/ec2-user/install" and make it executable
             /home/ec2-user/install:
               source: !Sub "https://aws-codedeploy-${AWS::Region}.s3.amazonaws.com/latest/install"
               mode: "000755" # executable
+          # Installing CodeDeploy agent
           commands:
             00-install-cd-agent:
               command: "./install auto"
@@ -93,6 +99,7 @@ Resources:
       Monitoring: true
       SecurityGroupIds:
         - !GetAtt SecurityGroup.GroupId
+      # This allow to run commands when the EC2 launches
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
@@ -134,7 +141,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref AWS::StackName
-
+  # Creating new IAM role to allow CodeBuild, CodeDeploy and CodePipeline to access AWS resources
   DeploymentRole:
     Type: AWS::IAM::Role
     Properties:
@@ -150,7 +157,7 @@ Resources:
           Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/PowerUserAccess
-
+  # Creating CodeBuild
   BuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -164,13 +171,13 @@ Resources:
         Image: aws/codebuild/standard:2.0
       Source:
         Type: CODEPIPELINE
-
+  # Creating CodeDeploy and know our CodeDeploy target is EC2
   DeploymentApplication:
     Type: AWS::CodeDeploy::Application
     Properties:
       ApplicationName: !Ref AWS::StackName
-      ComputePlatform: Server
-
+      ComputePlatform: Server # "Server" means here the EC2 instance
+  # Creating deployment group which is "Staging", this is a pre-production environment
   StagingDeploymentGroup:
     Type: AWS::CodeDeploy::DeploymentGroup
     DependsOn: Instance
@@ -179,16 +186,16 @@ Resources:
       ApplicationName: !Ref DeploymentApplication
       DeploymentConfigName: CodeDeployDefault.AllAtOnce
       ServiceRoleArn: !GetAtt DeploymentRole.Arn
-      Ec2TagFilters:
+      Ec2TagFilters: # Filter which EC2 instance to deploy
         - Key: aws:cloudformation:stack-name
           Type: KEY_AND_VALUE
           Value: !Ref AWS::StackName
-
+  # Creating CodePipeline, when this runs, it'll look for the "buildspec.yml" and "appspec.yml" in top directory
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       Name: !Ref AWS::StackName
-      ArtifactStore:
+      ArtifactStore: # Need the separate Cloudformation file for "CodePipelineBucket" to store artifacts
         Location: !Ref CodePipelineBucket
         Type: S3
       RoleArn: !GetAtt DeploymentRole.Arn
@@ -239,7 +246,7 @@ Resources:
                 ApplicationName: !Ref DeploymentApplication
                 DeploymentGroupName: !Ref StagingDeploymentGroup
               RunOrder: 1
-
+  # Creating webhook in CodePipeline for any changes on Github
   PipelineWebhook:
     Type: AWS::CodePipeline::Webhook
     Properties:
@@ -254,8 +261,7 @@ Resources:
       Name: !Sub 'webhook-${AWS::StackName}'
       TargetPipelineVersion: !GetAtt Pipeline.Version
       RegisterWithThirdParty: true
-
-
+# Just output response of the CloudFormation
 Outputs:
   InstanceEndpoint:
     Description: The DNS name for the created instance
