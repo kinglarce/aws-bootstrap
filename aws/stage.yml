@@ -203,6 +203,9 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeploy
+        # Add policies to the IAM for SSM to allow SSH access
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       # Add inline IAM policy to allow UserData script to access EC2 DescribeTags
       Policies:
         - PolicyName: ec2DescribeTags 
