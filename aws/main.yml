@@ -158,9 +158,6 @@ Resources:
       VpcId: !Ref VPC
       HealthCheckEnabled: true
       HealthCheckProtocol: HTTP
-      Targets:
-        - Id: !Ref Instance
-        - Id: !Ref Instance2
       Tags:
         - Key: Name
           Value: !Ref AWS::StackName
@@ -324,37 +321,6 @@ Resources:
             
             # Signal to CloudFormation that the instance is ready
             /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --region ${AWS::Region} --resource ${!LOGICAL_ID}
-  
-  # Creating different instances using the InstanceLaunchTemplate
-  Instance:
-    Type: AWS::EC2::Instance
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT5M
-        Count: 1
-    Properties:
-      SubnetId: !Ref SubnetAZ1 # Place instance to availability zone specified by subnet
-      LaunchTemplate:
-        LaunchTemplateId: !Ref InstanceLaunchTemplate
-        Version: !GetAtt InstanceLaunchTemplate.LatestVersionNumber
-      Tags:
-        - Key: Name
-          Value: !Ref AWS::StackName
-
-  Instance2:
-    Type: AWS::EC2::Instance
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT5M
-        Count: 1
-    Properties:
-      SubnetId: !Ref SubnetAZ2 # Place instance to availability zone specified by subnet
-      LaunchTemplate:
-        LaunchTemplateId: !Ref InstanceLaunchTemplate
-        Version: !GetAtt InstanceLaunchTemplate.LatestVersionNumber
-      Tags:
-        - Key: Name
-          Value: !Ref AWS::StackName
 
   # Creating new IAM role to allow CodeBuild, CodeDeploy and CodePipeline to access AWS resources
   DeploymentRole:
@@ -395,7 +361,6 @@ Resources:
   # Creating deployment group which is "Staging", this is a pre-production environment
   StagingDeploymentGroup:
     Type: AWS::CodeDeploy::DeploymentGroup
-    DependsOn: Instance
     Properties:
       DeploymentGroupName: staging
       AutoScalingGroups: # Tells CodeDeploy to deploy our app to every new instance get added by ASG
@@ -403,10 +368,7 @@ Resources:
       ApplicationName: !Ref DeploymentApplication
       DeploymentConfigName: CodeDeployDefault.AllAtOnce
       ServiceRoleArn: !GetAtt DeploymentRole.Arn
-      Ec2TagFilters: # Filter which EC2 instance to deploy
-        - Key: aws:cloudformation:stack-name
-          Type: KEY_AND_VALUE
-          Value: !Ref AWS::StackName
+
   # Creating CodePipeline, when this runs, it'll look for the "buildspec.yml" and "appspec.yml" in top directory
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
@@ -480,18 +442,6 @@ Resources:
       RegisterWithThirdParty: true
 # Just output response of the CloudFormation
 Outputs:
-  InstanceEndpoint1:
-    Description: The DNS name for the created instance
-    Value: !Sub "http://${Instance.PublicDnsName}:8080"
-    Export:
-      Name: InstanceEndpoint1
-
-  InstanceEndpoint2:
-    Description: The DNS name for the created instance
-    Value: !Sub "http://${Instance2.PublicDnsName}:8080"
-    Export:
-      Name: InstanceEndpoint2
-
   LBEndpoint: # Output of domain name for individual instances
     Description: The DNS name for the LB
     Value: !Sub "http://${LoadBalancer.DNSName}:80"
