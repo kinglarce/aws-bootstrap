@@ -30,6 +30,21 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref AWS::StackName
+  # Add PrivateSecurityGroup for private subnets that allow port 22
+  PrivateSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription:
+        !Sub 'Internal Security group for ${AWS::StackName}'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
   # Creating VPC for Adding Loadbalancer
   VPC:
     Type: AWS::EC2::VPC
@@ -40,32 +55,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref AWS::StackName
-  # Subnet template 1
-  SubnetAZ1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 0, !GetAZs '' ]
-      CidrBlock: 10.0.0.0/18
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Ref AWS::StackName
-        - Key: AZ
-          Value: !Select [ 0, !GetAZs '' ]
-  # Subnet template 2
-  SubnetAZ2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      AvailabilityZone: !Select [ 1, !GetAZs '' ]
-      CidrBlock: 10.0.64.0/18
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Ref AWS::StackName
-        - Key: AZ
-          Value: !Select [ 1, !GetAZs '' ]
   # Crewating InternetGateway to route traffic in and out
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -95,19 +84,7 @@ Resources:
       RouteTableId: !Ref RouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
-
-  SubnetRouteTableAssociationAZ1:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref RouteTable
-      SubnetId: !Ref SubnetAZ1
-
-  SubnetRouteTableAssociationAZ2:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref RouteTable
-      SubnetId: !Ref SubnetAZ2
-  # Creating LoadBalancer for balancing traffic to the subnets
+   # Creating LoadBalancer for balancing traffic to the subnets
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -144,6 +121,150 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref AWS::StackName
+  # Create Public Subnet
+  SubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.0.0.0/18
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+        - Key: AZ
+          Value: !Select [ 0, !GetAZs '' ]
+  # Create  Public Subnet
+  SubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: 10.0.64.0/18
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+        - Key: AZ
+          Value: !Select [ 1, !GetAZs '' ]
+  # Add Routing table for Public Subnet 1
+  SubnetRouteTableAssociationAZ1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetAZ1
+  # Add Routing table for Public Subnet 2
+  SubnetRouteTableAssociationAZ2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetAZ2
+  # Create Elastic IP Addresses for each NAT gateway
+  EIPAZ1:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  EIPAZ2:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+  # Create NAT gateways 
+  NATGatewayAZ1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIPAZ1.AllocationId
+      SubnetId: !Ref SubnetAZ1
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+        - Key: AZ
+          Value: !Select [ 0, !GetAZs '' ]
+
+  NATGatewayAZ2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIPAZ2.AllocationId
+      SubnetId: !Ref SubnetAZ2
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+        - Key: AZ
+          Value: !Select [ 1, !GetAZs '' ]
+  # Add private Subnets and CIDR range doesn't overlap with the Subnets about
+  PrivateSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.0.128.0/18
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+        - Key: AZ
+          Value: !Select [ 0, !GetAZs '' ]
+
+  PrivateSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: 10.0.192.0/18
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+        - Key: AZ
+          Value: !Select [ 1, !GetAZs '' ]
+  # Add Route Table to map outgoung traffic to NAT gateway which goes to Private Subnet
+  PrivateSubnetRouteTableAZ1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+        - Key: AZ
+          Value: !Select [ 0, !GetAZs '' ]
+
+  PrivateSubnetRouteTableAZ2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+        - Key: AZ
+          Value: !Select [ 1, !GetAZs '' ]
+
+  PrivateRouteAZ1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateSubnetRouteTableAZ1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGatewayAZ1
+
+  PrivateRouteAZ2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateSubnetRouteTableAZ2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGatewayAZ2
+
+  PrivateSubnetRouteTableAssociationAZ1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateSubnetRouteTableAZ1
+      SubnetId: !Ref PrivateSubnetAZ1
+
+  PrivateSubnetRouteTableAssociationAZ2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateSubnetRouteTableAZ2
+      SubnetId: !Ref PrivateSubnetAZ2
   # Creating AutoScalingGroup for implicitly adding instance
   ScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -179,9 +300,9 @@ Resources:
           Metrics:
             - "GroupMaxSize"
             - "GroupInServiceInstances"
-      VPCZoneIdentifier:
-        - !Ref SubnetAZ1
-        - !Ref SubnetAZ2
+      VPCZoneIdentifier: # Use Private Subnets in Auto Scaling group
+        - !Ref PrivateSubnetAZ1
+        - !Ref PrivateSubnetAZ2
       Tags:
         - Key: Name
           Value: !Ref AWS::StackName
@@ -254,8 +375,8 @@ Resources:
           Arn: !GetAtt InstanceProfile.Arn
         Monitoring:
           Enabled: true
-        SecurityGroupIds:
-          - !GetAtt SecurityGroup.GroupId
+        SecurityGroupIds: # This way, new instance automatically become part of new private security group
+          - !GetAtt PrivateSecurityGroup.GroupId
         # This allow to run commands when the EC2 launches
         UserData:
           Fn::Base64: !Sub |
