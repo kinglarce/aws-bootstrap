@@ -53,7 +53,7 @@ deploy_package_stack() {
 }
 
 deploy_stack() {
-    deploy_setup_stack
+    # deploy_setup_stack
     deploy_package_stack
     # Deploy the CloudFormation template
     echo -e "\n\n=========== Deploying main.yml ==========="

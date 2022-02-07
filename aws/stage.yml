@@ -4,8 +4,7 @@ Parameters:
   EC2InstanceType:
     Type: String
   EC2AMI:
-    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Type: String
 # Cloudformation script for creating different service
 Resources:
   # Creating SecurityGroup service for instance firewall
