@@ -104,7 +104,7 @@ delete_setup_stack() {
 # ----------------------------------------------------------------------
 
 # deploy_setup_stack
-deploy_stack
+# deploy_stack
 # check_stacks
-# delete_stack
-# delete_setup_stack
+delete_stack
+delete_setup_stack
